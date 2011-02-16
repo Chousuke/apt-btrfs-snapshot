@@ -1,0 +1,66 @@
+#!/usr/bin/python
+# Copyright (C) 2011 Canonical
+#
+# Author:
+#  Michael Vogt
+#
+# This program is free software; you can redistribute it and/or modify it under
+# the terms of the GNU General Public License as published by the Free Software
+# Foundation; version 3.
+#
+# This program is distributed in the hope that it will be useful, but WITHOUT
+# ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+# FOR A PARTICULAR PURPOSE.  See the GNU General Public License for more
+# details.
+#
+# You should have received a copy of the GNU General Public License along with
+# this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
+
+import datetime
+import os
+import string
+import subprocess
+import sys
+import tempfile
+
+from apt_btrfs_snapshot import AptBtrfsSnapshot
+
+if __name__ == "__main__":
+
+    # option -> function mapping
+    supported_commands = {
+        'supported' : 'snapshots_supported',
+        'snapshot' : 'create_btrfs_root_snapshot',
+        'list' : 'print_btrfs_root_snapshots',
+        'set-default' : 'command_set_default',
+        'delete' : 'delete_snapshot',
+        }
+
+    if os.getuid() != 0:
+        print "Sorry, you need to be root to run this program"
+        sys.exit(1)
+
+    apt_btrfs = AptBtrfsSnapshot()
+    if not apt_btrfs.snapshots_supported():
+        print "Sorry, your system lacks support for the snapshot feature"
+        sys.exit(1)
+
+    # poor mans commandline parser
+    if len(sys.argv) < 2 or sys.argv[1] not in supported_commands:
+        print "supported commands: %s" % ", ".join(supported_commands)        
+        sys.exit(1)
+
+    # run it
+    command = sys.argv[1]
+    if command in supported_commands:
+        func = getattr(apt_btrfs, supported_commands[command])
+        res = func(*sys.argv[2:])
+        if res:
+            sys.exit(0)
+        else:
+            sys.exit(1)
+
+
+
+
