@@ -28,7 +28,7 @@ class FstabEntry(object):
     """ a single fstab entry line """
     @classmethod
     def from_line(cls, line):
-        return FstabEntry(*line.split())
+        return FstabEntry(*line.partition("#")[0].split())
     def __init__(self, fs_spec, mountpoint, fstype, options, dump=0, passno=0):
         # uuid or device
         self.fs_spec = fs_spec
@@ -89,6 +89,10 @@ class AptBtrfsSnapshot(object):
         """ verify that the system supports apt btrfs snapshots
             by checking if the right fs layout is used etc
         """
+        # check for the helper binary
+        if not os.path.exists("/sbin/btrfs"):
+            return False
+        # check the fstab
         for entry in self.fstab:
             if (entry.mountpoint == "/" and
                 entry.fstype == "btrfs" and
