@@ -1,3 +1,9 @@
+apt-btrfs-snapshot (0.2.1build1) precise; urgency=low
+
+  * Rebuild to drop python2.6 dependencies.
+
+ -- Matthias Klose <doko@ubuntu.com>  Sat, 31 Dec 2011 02:00:37 +0000
+
 apt-btrfs-snapshot (0.2.1) oneiric; urgency=low
 
   * test/test_apt_btrfs_snapshot.py, test/data/fstab.bug872145:
