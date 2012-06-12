@@ -16,19 +16,31 @@
 # this program; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
+from __future__ import print_function, unicode_literals
+
 import datetime
 import os
-import string
 import subprocess
 import sys
 import time
 import tempfile
 
+class AptBtrfsSnapshotError(Exception):
+    pass
+class AptBtrfsNotSupportedError(AptBtrfsSnapshotError):
+    pass
+class AptBtrfsRootWithNoatimeError(AptBtrfsSnapshotError):
+    pass
+
 class FstabEntry(object):
     """ a single fstab entry line """
     @classmethod
     def from_line(cls, line):
-        return FstabEntry(*line.partition("#")[0].split())
+        # split up
+        args = line.partition("#")[0].split()
+        # use only the first 7 args and ignore anything after them, mount
+        # seems to do the same, see bug #873411 comment #7
+        return FstabEntry(*args[0:6])
     def __init__(self, fs_spec, mountpoint, fstype, options, dump=0, passno=0):
         # uuid or device
         self.fs_spec = fs_spec
@@ -46,18 +58,20 @@ class Fstab(list):
     """ a list of FstabEntry items """
     def __init__(self, fstab="/etc/fstab"):
         super(Fstab, self).__init__()
-        for line in map(string.strip, open(fstab)):
-            if line == "" or line.startswith("#"):
-                continue
-            try:
-                entry = FstabEntry.from_line(line)
-            except ValueError:
-                continue
-            self.append(entry)
+        
+        with open(fstab) as fstab_file:
+            for line in (l.strip() for l in fstab_file):
+                if line == "" or line.startswith("#"):
+                    continue
+                try:
+                    entry = FstabEntry.from_line(line)
+                except ValueError:
+                    continue
+                self.append(entry)
 
 class LowLevelCommands(object):
     """ lowlevel commands invoked to perform various tasks like
-        inteact with mount and btrfs tools
+        interact with mount and btrfs tools
     """
     def mount(self, fs_spec, mountpoint):
         ret = subprocess.call(["mount", fs_spec, mountpoint])
@@ -93,12 +107,16 @@ class AptBtrfsSnapshot(object):
         if not os.path.exists("/sbin/btrfs"):
             return False
         # check the fstab
+        entry = self._get_supported_btrfs_root_fstab_entry()
+        return entry != None
+    def _get_supported_btrfs_root_fstab_entry(self):
+        """ return the supported btrfs root FstabEntry or None """
         for entry in self.fstab:
             if (entry.mountpoint == "/" and
                 entry.fstype == "btrfs" and
                 "subvol=@" in entry.options):
-                return True
-        return False
+                return entry
+        return None
     def _uuid_for_mountpoint(self, mountpoint, fstab="/etc/fstab"):
         """ return the device or UUID for the given mountpoint """
         for entry in self.fstab:
@@ -118,7 +136,7 @@ class AptBtrfsSnapshot(object):
         self._btrfs_root_mountpoint = None
         return res
     def _get_now_str(self):
-        return  datetime.datetime.now().replace(microsecond=0).isoformat("_")
+        return  datetime.datetime.now().replace(microsecond=0).isoformat(str('_'))
     def create_btrfs_root_snapshot(self, additional_prefix=""):
         mp = self.mount_btrfs_root_volume()
         snap_id = self._get_now_str()
@@ -133,6 +151,15 @@ class AptBtrfsSnapshot(object):
             snapshots that are older then the given date)
         """
         l = []
+        # if older_than is used, ensure that the rootfs does not use
+        # "noatime"
+        if older_than != 0:
+            entry = self._get_supported_btrfs_root_fstab_entry()
+            if not entry:
+                raise AptBtrfsNotSupportedError()
+            if "noatime" in entry.options:
+                raise AptBtrfsRootWithNoatimeError()
+        # if there is no older than, interpret that as "now"
         if older_than == 0:
             older_than = time.time()
         mp = self.mount_btrfs_root_volume()
@@ -146,8 +173,8 @@ class AptBtrfsSnapshot(object):
         self.umount_btrfs_root_volume()
         return l
     def print_btrfs_root_snapshots(self):
-        print "Available snapshots:"
-        print "  \n".join(self.get_btrfs_root_snapshots_list())
+        print("Available snapshots:")
+        print("  \n".join(self.get_btrfs_root_snapshots_list()))
         return True
     def _parse_older_than_to_unixtime(self, timefmt):
         now = time.time()
@@ -157,18 +184,28 @@ class AptBtrfsSnapshot(object):
         return now - (days * 24 * 60 * 60)
     def print_btrfs_root_snapshots_older_than(self, timefmt):
         older_than_unixtime = self._parse_older_than_to_unixtime(timefmt)
-        print "Available snapshots older than '%s':" % timefmt
-        print "  \n".join(self.get_btrfs_root_snapshots_list(
-                older_than=older_than_unixtime))
+        try:
+            print("Available snapshots older than '%s':" % timefmt)
+            print("  \n".join(self.get_btrfs_root_snapshots_list(
+                    older_than=older_than_unixtime)))
+        except AptBtrfsRootWithNoatimeError:
+            sys.stderr.write("Error: fstab option 'noatime' incompatible with option")
+            return False
         return True
     def clean_btrfs_root_snapshots_older_than(self, timefmt):
+        res = True
         older_than_unixtime = self._parse_older_than_to_unixtime(timefmt)
-        for snap in self.get_btrfs_root_snapshots_list(
-            older_than=older_than_unixtime):
-            self.delete_snapshot(snap)
+        try:
+            for snap in self.get_btrfs_root_snapshots_list(
+                older_than=older_than_unixtime):
+                res &= self.delete_snapshot(snap)
+        except AptBtrfsRootWithNoatimeError:
+            sys.stderr.write("Error: fstab option 'noatime' incompatible with option")
+            return False
+        return res
     def command_set_default(self, snapshot_name):
         res = self.set_default(snapshot_name)
-        print "Please reboot"
+        print("Please reboot")
         return res
     def set_default(self, snapshot_name, backup=True):
         """ set new default """
