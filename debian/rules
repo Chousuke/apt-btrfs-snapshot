@@ -13,6 +13,7 @@ override_dh_auto_test:
 endif
 
 override_dh_auto_build:
+	pod2man --release=Ubuntu --section=8 --center=APT debian/apt-btrfs-snapshot.pod debian/apt-btrfs-snapshot.8
 	dh_auto_build
 	$(call py3sdo, setup.py build)
 
@@ -22,6 +23,7 @@ override_dh_auto_install:
 
 override_dh_auto_clean:
 	dh_auto_clean
+	rm -f debian/apt-btrfs-snapshot.8
 	rm -rf build
 	rm -rf *.egg-info
 
