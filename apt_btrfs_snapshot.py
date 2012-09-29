@@ -80,11 +80,19 @@ class Fstab(list):
                     continue
                 self.append(entry)
 
+class NullWriter(object):
+    def write(self, x): 
+        pass
 
 class LowLevelCommands(object):
     """ lowlevel commands invoked to perform various tasks like
         interact with mount and btrfs tools
     """
+
+    # I suppose this will leak, but since there is only one instance of this 
+    # class anyway while the program using it runs, it should be fine.
+    null = open(os.devnull, 'w') # could use a logger instead, though
+    
     def mount(self, fs_spec, mountpoint):
         ret = subprocess.call(["mount", fs_spec, mountpoint])
         return ret == 0
@@ -95,11 +103,11 @@ class LowLevelCommands(object):
 
     def btrfs_subvolume_snapshot(self, source, dest):
         ret = subprocess.call(["btrfs", "subvolume", "snapshot",
-                               source, dest])
+                               source, dest], stdout=self.null)
         return ret == 0
 
     def btrfs_delete_snapshot(self, snapshot):
-        ret = subprocess.call(["btrfs", "subvolume", "delete", snapshot])
+        ret = subprocess.call(["btrfs", "subvolume", "delete", snapshot], stdout=self.null)
         return ret == 0
 
 
@@ -164,14 +172,16 @@ class AptBtrfsSnapshot(object):
 
     def create_btrfs_root_snapshot(self, additional_prefix=""):
         if self.DISABLED:
-           print(_("Snapshotting disabled, skipping creation"))
+           print(_("apt-btrfs-snapshot: Disabled, skipping creation"))
            return True;
 
         mp = self.mount_btrfs_root_volume()
         snap_id = self._get_now_str()
+        name = self.SNAP_PREFIX + additional_prefix + snap_id
+        print(_("apt-btrfs-snapshot: Creating %s") % name)
         res = self.commands.btrfs_subvolume_snapshot(
             os.path.join(mp, self.ROOT),
-            os.path.join(mp, self.SNAP_PREFIX + additional_prefix + snap_id))
+            os.path.join(mp, name))
         self.umount_btrfs_root_volume()
         return res
 
@@ -234,6 +244,7 @@ class AptBtrfsSnapshot(object):
             for snap in self.get_btrfs_root_snapshots_list(
                 older_than=older_than_unixtime):
                 res &= self.delete_snapshot(snap)
+                
         except AptBtrfsRootWithNoatimeError:
             sys.stderr.write(_("Error: fstab option 'noatime' incompatible " 
                                "with option"))
@@ -268,6 +279,7 @@ class AptBtrfsSnapshot(object):
         res = self.commands.btrfs_delete_snapshot(
             os.path.join(mp, snapshot_name))
         self.umount_btrfs_root_volume()
+        print(_("Deleted snapshot %s") % snapshot_name)
         return res
 
     def show_configuration(self):

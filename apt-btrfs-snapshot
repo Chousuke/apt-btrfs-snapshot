@@ -33,6 +33,10 @@ from gettext import gettext as _
 from apt_btrfs_snapshot import AptBtrfsSnapshot
 
 
+def error(msg):
+    sys.stderr.write(_("error: %s") % msg)
+    sys.stderr.write("\n")
+
 if __name__ == "__main__":
 
     gettext.bindtextdomain("apt-btrfs-snapshot")
@@ -42,6 +46,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=description)
     parser.add_argument("--debug", action="store_true", default=False,
                         help="enable debug output")
+    parser.add_argument("-q", "--quiet", help=_("Suppress output"), action="store_true", default=False)
+
     subparser = parser.add_subparsers(title="Commands")
     # supported
     command = subparser.add_parser(
@@ -89,13 +95,16 @@ if __name__ == "__main__":
     else:
         logging.basicConfig(level=logging.INFO)
 
+    if args.quiet:
+        sys.stdout = open(os.devnull, 'w')
+
     if os.getuid() != 0:
-        print(_("Sorry, you need to be root to run this program"))
+        error(_("You need to be root to run this program"))
         sys.exit(1)
 
     apt_btrfs = AptBtrfsSnapshot()
     if not apt_btrfs.snapshots_supported():
-        print(_("Sorry, your system lacks support for the snapshot feature"))
+        error(_("Your system lacks support for the snapshot feature"))
         sys.exit(1)
 
     res = False
@@ -120,7 +129,7 @@ if __name__ == "__main__":
     elif args.command == "show-configuration":
         res = apt_btrfs.show_configuration()
     else:
-        print(_("ERROR: Unhandled command: '%s'") % args.command)
+        error(_("Unhandled command: '%s'") % args.command)
 
     # return the right exit code
     if res:
