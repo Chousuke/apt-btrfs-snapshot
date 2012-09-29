@@ -27,6 +27,7 @@ import tempfile
 
 from apt_pkg import init_config, config
 
+from gettext import gettext as _
 class AptBtrfsSnapshotError(Exception):
     pass
 
@@ -163,7 +164,7 @@ class AptBtrfsSnapshot(object):
 
     def create_btrfs_root_snapshot(self, additional_prefix=""):
         if self.DISABLED:
-           print("Snapshotting disabled, skipping creation")
+           print(_("Snapshotting disabled, skipping creation"))
            return True;
 
         mp = self.mount_btrfs_root_volume()
@@ -203,26 +204,26 @@ class AptBtrfsSnapshot(object):
         return l
 
     def print_btrfs_root_snapshots(self):
-        print("Available snapshots:")
+        print(_("Available snapshots:"))
         print("  \n".join(self.get_btrfs_root_snapshots_list()))
         return True
 
     def _parse_older_than_to_unixtime(self, timefmt):
         now = time.time()
         if not timefmt.endswith("d"):
-            raise Exception("Please specify time in days (e.g. 10d)")
+            raise Exception(_("Please specify time in days (e.g. 10d)"))
         days = int(timefmt[:-1])
         return now - (days * 24 * 60 * 60)
 
     def print_btrfs_root_snapshots_older_than(self, timefmt):
         older_than_unixtime = self._parse_older_than_to_unixtime(timefmt)
         try:
-            print("Available snapshots older than '%s':" % timefmt)
+            print(_("Available snapshots older than '%s':") % timefmt)
             print("  \n".join(self.get_btrfs_root_snapshots_list(
                     older_than=older_than_unixtime)))
         except AptBtrfsRootWithNoatimeError:
-            sys.stderr.write("Error: fstab option 'noatime' incompatible "
-                             "with option")
+            sys.stderr.write(_("Error: fstab option 'noatime' incompatible "
+                               "with option"))
             return False
         return True
 
@@ -234,8 +235,8 @@ class AptBtrfsSnapshot(object):
                 older_than=older_than_unixtime):
                 res &= self.delete_snapshot(snap)
         except AptBtrfsRootWithNoatimeError:
-            sys.stderr.write("Error: fstab option 'noatime' incompatible with "
-                             "option")
+            sys.stderr.write(_("Error: fstab option 'noatime' incompatible " 
+                               "with option"))
             return False
         return res
 
@@ -254,11 +255,11 @@ class AptBtrfsSnapshot(object):
             backup = os.path.join(mp, self.BACKUP_PREFIX + self._get_now_str())
             os.rename(default_root, backup)
             os.rename(new_root, default_root)
-            print("Default changed to %s, please reboot for changes to take "
-                  "effect." % snapshot_name)
+            print(_("Default changed to %s, please reboot for changes to take "
+                    "effect.") % snapshot_name)
         else:
-            print("You have selected an invalid snapshot. Please make sure "
-                  "that it exists, and that it is not %s." % self.ROOT)
+            print(_("You have selected an invalid snapshot. Please make sure "
+                    "that it exists, and that it is not %s.") % self.ROOT)
         self.umount_btrfs_root_volume()
         return True
 
@@ -270,8 +271,9 @@ class AptBtrfsSnapshot(object):
         return res
 
     def show_configuration(self):
-        confs = {"APT::Snapshots::RootSubvolume": "@ (default)",
-                 "APT::Snapshots::Prefix": "@apt-snapshot (default)"}
+        d = _("default")
+        confs = {"APT::Snapshots::RootSubvolume": "@ (%s)" % d ,
+                 "APT::Snapshots::Prefix": "@apt-snapshot (%s)" % d}
         for k, v in confs.items():
             val = config.get(k, v)
             print(k, "=", val)
