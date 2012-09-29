@@ -25,9 +25,11 @@ import sys
 import time
 import tempfile
 
-from apt_pkg import init_config, config
+import apt_pkg
 
 from gettext import gettext as _
+
+
 class AptBtrfsSnapshotError(Exception):
     pass
 
@@ -80,19 +82,21 @@ class Fstab(list):
                     continue
                 self.append(entry)
 
+
 class NullWriter(object):
-    def write(self, x): 
+    def write(self, x):
         pass
+
 
 class LowLevelCommands(object):
     """ lowlevel commands invoked to perform various tasks like
         interact with mount and btrfs tools
     """
 
-    # I suppose this will leak, but since there is only one instance of this 
+    # I suppose this will leak, but since there is only one instance of this
     # class anyway while the program using it runs, it should be fine.
-    null = open(os.devnull, 'w') # could use a logger instead, though
-    
+    null = open(os.devnull, 'w')  # could use a logger instead, though
+
     def mount(self, fs_spec, mountpoint):
         ret = subprocess.call(["mount", fs_spec, mountpoint])
         return ret == 0
@@ -107,7 +111,8 @@ class LowLevelCommands(object):
         return ret == 0
 
     def btrfs_delete_snapshot(self, snapshot):
-        ret = subprocess.call(["btrfs", "subvolume", "delete", snapshot], stdout=self.null)
+        ret = subprocess.call(["btrfs", "subvolume", "delete", snapshot],
+                              stdout=self.null)
         return ret == 0
 
 
@@ -115,10 +120,12 @@ class AptBtrfsSnapshot(object):
     """ the high level object that interacts with the snapshot system """
 
     def __init__(self, fstab="/etc/fstab"):
-        init_config() # apt_pkg
+        apt_pkg.init_config()
+        config = apt_pkg.config
         self.DISABLED = 'APT_NO_SNAPSHOTS' in os.environ
         self.ROOT = config.get("APT::Snapshots::RootSubvolume", "@")
-        self.SNAP_PREFIX = config.get("APT::Snapshots::Prefix", "@apt-snapshot") + '-';
+        self.SNAP_PREFIX = config.get("APT::Snapshots::Prefix",
+                                      "@apt-snapshot") + '-'
         self.BACKUP_PREFIX = self.SNAP_PREFIX + "old-root-"
         self.fstab = Fstab(fstab)
         self.commands = LowLevelCommands()
@@ -137,7 +144,7 @@ class AptBtrfsSnapshot(object):
 
     def _get_supported_btrfs_root_fstab_entry(self):
         """ return the supported btrfs root FstabEntry or None """
-        root_subvol = "subvol=%s" % self.ROOT;
+        root_subvol = "subvol=%s" % self.ROOT
         for entry in self.fstab:
             if (entry.mountpoint == "/" and
                 entry.fstype == "btrfs" and
@@ -172,8 +179,8 @@ class AptBtrfsSnapshot(object):
 
     def create_btrfs_root_snapshot(self, additional_prefix=""):
         if self.DISABLED:
-           print(_("apt-btrfs-snapshot: Disabled, skipping creation"))
-           return True;
+            print(_("apt-btrfs-snapshot: Disabled, skipping creation"))
+            return True
 
         mp = self.mount_btrfs_root_volume()
         snap_id = self._get_now_str()
@@ -244,9 +251,9 @@ class AptBtrfsSnapshot(object):
             for snap in self.get_btrfs_root_snapshots_list(
                 older_than=older_than_unixtime):
                 res &= self.delete_snapshot(snap)
-                
+
         except AptBtrfsRootWithNoatimeError:
-            sys.stderr.write(_("Error: fstab option 'noatime' incompatible " 
+            sys.stderr.write(_("Error: fstab option 'noatime' incompatible "
                                "with option"))
             return False
         return res
@@ -284,10 +291,10 @@ class AptBtrfsSnapshot(object):
 
     def show_configuration(self):
         d = _("default")
-        confs = {"APT::Snapshots::RootSubvolume": "@ (%s)" % d ,
+        confs = {"APT::Snapshots::RootSubvolume": "@ (%s)" % d,
                  "APT::Snapshots::Prefix": "@apt-snapshot (%s)" % d}
         for k, v in confs.items():
-            val = config.get(k, v)
+            val = apt_pkg.config.get(k, v)
             print(k, "=", val)
 
         return True

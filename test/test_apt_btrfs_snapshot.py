@@ -19,10 +19,18 @@ from apt_btrfs_snapshot import (
     )
 
 
+def nothing():
+    pass
+
+
 class TestFstab(unittest.TestCase):
 
     def setUp(self):
         self.testdir = os.path.dirname(os.path.abspath(__file__))
+        patcher = mock.patch('apt_pkg.init_config', new=nothing)
+        patcher2 = mock.patch('apt_pkg.config', {})
+        patcher.start()
+        patcher2.start()
 
     @mock.patch('os.path.exists')
     def test_fstab_detect_snapshot(self, mock_commands):
