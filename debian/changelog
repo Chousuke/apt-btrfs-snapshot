@@ -1,3 +1,11 @@
+apt-btrfs-snapshot (0.4.0) quantal; urgency=low
+
+  * Add some configurability
+  * Add a manual page
+  * Hide references to temporary directories from UI
+
+ -- Jarkko Oranen <oranenj@iki.fi>  Sat, 29 Sep 2012 19:39:31 +0300
+
 apt-btrfs-snapshot (0.3.3) quantal; urgency=low
 
   * add missing pep8 depedency to fix FTBFS
