@@ -76,6 +76,10 @@ if __name__ == "__main__":
     command.add_argument("time")
     command.set_defaults(command="delete-older-than")
 
+    command = subparser.add_parser(
+        "show-configuration", help=_("Display configuration variables"))
+    command.set_defaults(command="show-configuration")
+
     # parse args
     args = parser.parse_args()
 
@@ -113,6 +117,8 @@ if __name__ == "__main__":
         res = apt_btrfs.print_btrfs_root_snapshots_older_than(args.time)
     elif args.command == "delete-older-than":
         res = apt_btrfs.clean_btrfs_root_snapshots_older_than(args.time)
+    elif args.command == "show-configuration":
+        res = apt_btrfs.show_configuration()
     else:
         print(_("ERROR: Unhandled command: '%s'") % args.command)
 

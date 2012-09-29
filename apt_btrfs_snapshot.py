@@ -25,6 +25,7 @@ import sys
 import time
 import tempfile
 
+from apt_pkg import init_config, config
 
 class AptBtrfsSnapshotError(Exception):
     pass
@@ -104,12 +105,12 @@ class LowLevelCommands(object):
 class AptBtrfsSnapshot(object):
     """ the high level object that interacts with the snapshot system """
 
-    # normal snapshot
-    SNAP_PREFIX = "@apt-snapshot-"
-    # backname when changing
-    BACKUP_PREFIX = SNAP_PREFIX + "old-root-"
-
     def __init__(self, fstab="/etc/fstab"):
+        init_config() # apt_pkg
+        self.DISABLED = 'APT_NO_SNAPSHOTS' in os.environ
+        self.ROOT = config.get("APT::Snapshots::RootSubvolume", "@")
+        self.SNAP_PREFIX = config.get("APT::Snapshots::Prefix", "@apt-snapshot") + '-';
+        self.BACKUP_PREFIX = self.SNAP_PREFIX + "old-root-"
         self.fstab = Fstab(fstab)
         self.commands = LowLevelCommands()
         self._btrfs_root_mountpoint = None
@@ -127,10 +128,11 @@ class AptBtrfsSnapshot(object):
 
     def _get_supported_btrfs_root_fstab_entry(self):
         """ return the supported btrfs root FstabEntry or None """
+        root_subvol = "subvol=%s" % self.ROOT;
         for entry in self.fstab:
             if (entry.mountpoint == "/" and
                 entry.fstype == "btrfs" and
-                "subvol=@" in entry.options):
+                root_subvol in entry.options):
                 return entry
         return None
 
@@ -160,10 +162,14 @@ class AptBtrfsSnapshot(object):
             str('_'))
 
     def create_btrfs_root_snapshot(self, additional_prefix=""):
+        if self.DISABLED:
+           print("Snapshotting disabled, skipping creation")
+           return True;
+
         mp = self.mount_btrfs_root_volume()
         snap_id = self._get_now_str()
         res = self.commands.btrfs_subvolume_snapshot(
-            os.path.join(mp, "@"),
+            os.path.join(mp, self.ROOT),
             os.path.join(mp, self.SNAP_PREFIX + additional_prefix + snap_id))
         self.umount_btrfs_root_volume()
         return res
@@ -242,9 +248,9 @@ class AptBtrfsSnapshot(object):
         mp = self.mount_btrfs_root_volume()
         new_root = os.path.join(mp, snapshot_name)
         if (os.path.isdir(new_root) and
-            snapshot_name.startswith("@") and
-            snapshot_name != "@"):
-            default_root = os.path.join(mp, "@")
+            snapshot_name.startswith(self.SNAP_PREFIX) and
+            snapshot_name != self.ROOT):
+            default_root = os.path.join(mp, self.ROOT)
             backup = os.path.join(mp, self.BACKUP_PREFIX + self._get_now_str())
             os.rename(default_root, backup)
             os.rename(new_root, default_root)
@@ -252,7 +258,7 @@ class AptBtrfsSnapshot(object):
                   "effect." % snapshot_name)
         else:
             print("You have selected an invalid snapshot. Please make sure "
-                  "that it exists, and that it is not \"@\".")
+                  "that it exists, and that it is not %s." % self.ROOT)
         self.umount_btrfs_root_volume()
         return True
 
@@ -262,3 +268,12 @@ class AptBtrfsSnapshot(object):
             os.path.join(mp, snapshot_name))
         self.umount_btrfs_root_volume()
         return res
+
+    def show_configuration(self):
+        confs = {"APT::Snapshots::RootSubvolume": "@ (default)",
+                 "APT::Snapshots::Prefix": "@apt-snapshot (default)"}
+        for k, v in confs.items():
+            val = config.get(k, v)
+            print(k, "=", val)
+
+        return True
