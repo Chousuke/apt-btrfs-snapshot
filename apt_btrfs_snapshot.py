@@ -177,9 +177,40 @@ class AptBtrfsSnapshot(object):
         return datetime.datetime.now().replace(microsecond=0).isoformat(
             str('_'))
 
+    def _get_last_snapshot_time(self):
+        last_snapshot = datetime.datetime.fromtimestamp(0.0)
+        last_snapshot_file = '/run/apt_last_snapshot'
+
+        if os.path.exists(last_snapshot_file):
+            try:
+                t = open(last_snapshot_file)
+                last_snapshot = \
+                datetime.datetime.fromtimestamp(float(t.readline()))
+            except:
+                # If we fail to read the timestamp for some reason, just return
+                # the default value silently
+                pass
+            finally:
+                t.close()
+        return last_snapshot
+
+    def _save_last_snapshot_time(self):
+        f = open('/run/apt_last_snapshot', 'w')
+        f.write(str(time.time()))
+        f.close()
+
     def create_btrfs_root_snapshot(self, additional_prefix=""):
         if self.DISABLED:
             print(_("apt-btrfs-snapshot: Disabled, skipping creation"))
+            return True
+        last = self._get_last_snapshot_time()
+
+        # If a prefix is supplied, the user most likely wants a snapshot even
+        # if there has been one made recently. Otherwise skip making a snapshot
+        # If one has been made recently.
+        if additional_prefix is "" \
+        and last > datetime.datetime.now() - datetime.timedelta(seconds=60):
+            print (_("A recent snapshot already exists: %s") % last)
             return True
 
         mp = self.mount_btrfs_root_volume()
@@ -190,6 +221,7 @@ class AptBtrfsSnapshot(object):
             os.path.join(mp, self.ROOT),
             os.path.join(mp, name))
         self.umount_btrfs_root_volume()
+        self._save_last_snapshot_time()
         return res
 
     def get_btrfs_root_snapshots_list(self, older_than=0):

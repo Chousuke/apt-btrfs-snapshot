@@ -8,6 +8,7 @@ except ImportError:
 import mock
 import os
 import sys
+import datetime
 import time
 import unittest
 
@@ -92,23 +93,33 @@ class TestFstab(unittest.TestCase):
         mock_commands.btrfs_subvolume_snapshot.return_value = True
         mock_commands.mount.return_value = True
         mock_commands.umount.return_value = True
+        f = lambda: datetime.datetime.fromtimestamp(0.0)
         # do it
         apt_btrfs = AptBtrfsSnapshot(
             fstab=os.path.join(self.testdir, "data", "fstab"))
-        res = apt_btrfs.create_btrfs_root_snapshot()
-        # check results
-        self.assertTrue(apt_btrfs.commands.mount.called)
-        self.assertTrue(apt_btrfs.commands.umount.called)
-        self.assertTrue(res)
-        self.assertTrue(apt_btrfs.commands.btrfs_subvolume_snapshot.called)
-        (args, kwargs) = apt_btrfs.commands.btrfs_subvolume_snapshot.call_args
-        self.assertTrue(len(args), 2)
-        self.assertTrue(args[0].endswith("@"))
-        self.assertTrue("@apt-snapshot-" in args[1])
-        # again with a additional prefix for the snapshot
-        res = apt_btrfs.create_btrfs_root_snapshot("release-upgrade-natty-")
-        (args, kwargs) = apt_btrfs.commands.btrfs_subvolume_snapshot.call_args
-        self.assertTrue("@apt-snapshot-release-upgrade-natty-" in args[1])
+        with mock.patch.multiple(apt_btrfs,
+            _save_last_snapshot_time=nothing,
+            _get_last_snapshot_time=f):
+            res = apt_btrfs.create_btrfs_root_snapshot()
+            # check results
+            self.assertTrue(apt_btrfs.commands.mount.called)
+            self.assertTrue(apt_btrfs.commands.umount.called)
+            self.assertTrue(res)
+            self.assertTrue(apt_btrfs.commands.btrfs_subvolume_snapshot.called)
+            (args, kwargs) = \
+            apt_btrfs.commands.btrfs_subvolume_snapshot.call_args
+
+            self.assertTrue(len(args), 2)
+            self.assertTrue(args[0].endswith("@"))
+            self.assertTrue("@apt-snapshot-" in args[1])
+
+            # again with a additional prefix for the snapshot
+            prefix = "release-upgrade-natty-"
+            res = apt_btrfs.create_btrfs_root_snapshot(prefix)
+            (args, kwargs) = \
+            apt_btrfs.commands.btrfs_subvolume_snapshot.call_args
+
+            self.assertTrue("@apt-snapshot-release-upgrade-natty-" in args[1])
 
     @mock.patch('apt_btrfs_snapshot.LowLevelCommands')
     def test_btrfs_delete_snapshot(self, mock_commands):
