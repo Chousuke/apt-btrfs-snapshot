@@ -37,6 +37,13 @@ def error(msg):
     sys.stderr.write(_("error: %s") % msg)
     sys.stderr.write("\n")
 
+
+def needs_root():
+    if os.getuid() != 0:
+        error(_("You need to be root to run this program"))
+        sys.exit(1)
+
+
 if __name__ == "__main__":
 
     gettext.bindtextdomain("apt-btrfs-snapshot")
@@ -98,10 +105,6 @@ if __name__ == "__main__":
     if args.quiet:
         sys.stdout = open(os.devnull, 'w')
 
-    if os.getuid() != 0:
-        error(_("You need to be root to run this program"))
-        sys.exit(1)
-
     apt_btrfs = AptBtrfsSnapshot()
     if not apt_btrfs.snapshots_supported():
         error(_("Your system lacks support for the snapshot feature"))
@@ -112,9 +115,13 @@ if __name__ == "__main__":
         res = apt_btrfs.snapshots_supported()
         if res:
             print(_("Supported"))
+            sys.exit(0)
         else:
             print(_("Not supported"))
-    elif args.command == "snapshot":
+            sys.exit(1)
+    
+    needs_root()  # exits if user is not root
+    if args.command == "snapshot":
         res = apt_btrfs.create_btrfs_root_snapshot()
     elif args.command == "list":
         res = apt_btrfs.print_btrfs_root_snapshots()
